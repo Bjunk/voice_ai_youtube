@@ -798,7 +798,7 @@ class NeuralVocoder(nn.Module):
                  hop_length: int = HOP_LENGTH,
                  channels: int = 256,
                  resblock_kernel_sizes: Tuple[int, ...] = (3, 7, 11),
-                 upsample_rates: Tuple[int, ...] = (4, 4, 2, 2)):
+                 upsample_rates: Tuple[int, ...] = (8, 8, 2, 2)):
         super().__init__()
         self.hop_length = hop_length
         self.upsample_rates = upsample_rates
@@ -1286,16 +1286,10 @@ def train_and_synthesize(audio_source: str,
     model = AcousticModel().to(DEVICE)
     vocoder: Optional[NeuralVocoder] = None
 
-    # Cargar modelos previamente entrenados si existen y no se fuerza reentreno
-    if os.path.exists(MODEL_PATH) and os.path.exists(VOCODER_PATH) and not force_retrain:
+    if os.path.exists(MODEL_PATH) and not force_retrain:
         print(f"[*] Cargando modelo acústico desde '{MODEL_PATH}'...")
         model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
-        print("[✔] Modelo acústico cargado.")
-
-        print(f"[*] Cargando vocoder desde '{VOCODER_PATH}'...")
-        vocoder = NeuralVocoder(n_mels=N_MELS, hop_length=HOP_LENGTH).to(DEVICE)
-        vocoder.load_state_dict(torch.load(VOCODER_PATH, map_location=DEVICE))
-        print("[✔] Vocoder cargado. Omitiendo entrenamiento.")
+        print("[✔] Modelo acústico cargado. Omitiendo entrenamiento acústico.")
     else:
         final_loss = _train_model(model, dataset, epochs=epochs, batch_size=batch_size)
         print(f"\n[✔] Entrenamiento acústico finalizado. Loss final: {final_loss:.6f}")
@@ -1306,7 +1300,12 @@ def train_and_synthesize(audio_source: str,
         val_mse = _evaluate_model(model, dataset)
         print(f"    MSE promedio de mel (validación interna): {val_mse:.6f}")
 
-        # Entrenar vocoder neuronal con el audio de referencia
+    if os.path.exists(VOCODER_PATH) and not force_retrain:
+        print(f"[*] Cargando vocoder desde '{VOCODER_PATH}'...")
+        vocoder = NeuralVocoder(n_mels=N_MELS, hop_length=HOP_LENGTH).to(DEVICE)
+        vocoder.load_state_dict(torch.load(VOCODER_PATH, map_location=DEVICE))
+        print("[✔] Vocoder cargado. Omitiendo entrenamiento del vocoder.")
+    else:
         vocoder = train_neural_vocoder(dataset.audio, dsp, epochs=vocoder_epochs)
         torch.save(vocoder.state_dict(), VOCODER_PATH)
         print(f"[✔] Vocoder guardado en '{VOCODER_PATH}'")
