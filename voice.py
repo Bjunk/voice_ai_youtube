@@ -1061,6 +1061,12 @@ def _evaluate(model: AcousticModel, dataset: VoiceDataset) -> float:
             tok = torch.LongTensor([ex["tokens"]]).to(DEVICE)
             tgt = torch.FloatTensor(ex["mel"]).unsqueeze(0).to(DEVICE)
             pred, _, _, _ = model(tok, target_mel_len=tgt.size(-1))
+            tl, pl = tgt.size(-1), pred.size(1)
+            if pl > tl:
+                pred = pred[:, :tl, :]
+            elif pl < tl:
+                pad  = torch.zeros(pred.size(0), tl - pl, pred.size(2), device=pred.device)
+                pred = torch.cat([pred, pad], dim=1)
             total += crit(pred.transpose(1, 2), tgt).item()
             n     += 1
     return total / max(n, 1)
